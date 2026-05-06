@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-plugins-marketplace.json",
+  "name": "sdls-claude-plugins",
+  "owner": {
+    "name": "programf",
+    "url": "https://github.com/programf-mine"
+  },
+  "plugins": [
+    {
+      "name": "FTools",
+      "source": "./plugins/FTools",
+      "description": "SDLS team development tools — screen capture automation library, manual writing conventions, and verification helpers for WinForms-based SDLS UI work.",
+      "version": "0.1.0"
+    }
+  ]
+}

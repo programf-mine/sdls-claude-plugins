@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-plugin.json",
+  "name": "FTools",
+  "version": "0.1.0",
+  "description": "SDLS team development tools. Initial release ships the sdls-manual skill (screen capture automation + manual writing conventions for WinForms-based SDLS UI).",
+  "author": {
+    "name": "programf",
+    "url": "https://github.com/programf-mine"
+  },
+  "homepage": "https://github.com/programf-mine/sdls-claude-plugins",
+  "keywords": [
+    "sdls",
+    "screen-capture",
+    "manual",
+    "winforms",
+    "powershell"
+  ]
+}
