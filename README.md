@@ -4,22 +4,12 @@ Claude Code 플러그인 마켓플레이스 — SDLS 팀 내부 도구 모음.
 
 ## 설치
 
-Claude Code 세션에서:
+상세 안내: **[DOC/INSTALL.md](DOC/INSTALL.md)** (사전 요구 / 설치 / 사용 / 업데이트 / 문제 해결)
 
+빠른 시작:
 ```
 /plugin marketplace add programf-mine/sdls-claude-plugins
 /plugin install FTools@sdls-claude-plugins
-```
-
-설치 확인:
-```
-/plugin
-```
-
-업데이트 (마켓플레이스 push 후):
-```
-/plugin marketplace update sdls-claude-plugins
-/plugin update FTools
 ```
 
 ## 포함된 플러그인
