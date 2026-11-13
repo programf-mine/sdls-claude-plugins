@@ -255,6 +255,12 @@ namespace FTeleHub
 			}
 			if (string.IsNullOrWhiteSpace(text))
 			{
+				//// 서비스 메시지(주제 생성 · 멤버 입장 · 고정 · 그룹 전환 등)에는 답하지 않는다 - 사용자 내용(사진 · 파일 …)에만 답한다(2026-11-13 실측)
+				if (HasUserContent(m) == false)
+				{
+					HubLog.Info("service message " + uid + " ignored");
+					return;
+				}
 				say("글자만 받습니다.");
 				return;
 			}
@@ -290,6 +296,210 @@ namespace FTeleHub
 			if (paused) { say("일시정지 중 - 보류(" + r.id + "). /resume 뒤 /deliver " + r.id + " 로 보낼 수 있습니다."); }
 		}
 
+		//// 사용자 내용이 있는 메시지인가(글자 없는 메시지 중 "글자만 받습니다" 로 답할 것). 나머지는 서비스 메시지로 본다.
+		private static readonly string[] UserContentKeys = { "photo", "document", "sticker", "voice", "video", "video_note", "audio", "animation", "contact", "location", "venue", "poll", "dice", "game", "story", "paid_media", "caption" };
+
+		internal static bool HasUserContent(Dictionary<string, object> m)
+		{
+			return m != null && UserContentKeys.Any(k => m.ContainsKey(k));
+		}
+
+		//// /addnode 인수 → 노드 이름(대문자, 순서 유지, 중복 제거) · 규칙 위반 이름. 공백 · 쉼표로 나눈다.
+		internal const int MaxAddNodes = 8;
+
+		internal static List<string> ParseNodeList(string arg, List<string> bad)
+		{
+			List<string> names = new List<string>();
+			foreach (string raw in (arg ?? string.Empty).Split(new[] { ' ', ',', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+			{
+				string n = raw.Trim().ToUpperInvariant();
+				if (HubConfig.IsValidNode(n) == false)
+				{
+					bad.Add(raw.Trim());
+					continue;
+				}
+				if (names.Contains(n) == false)
+				{
+					names.Add(n);
+				}
+			}
+			return names;
+		}
+
+		//// /addnode 복구 근거(설계 Final) - 결과 안내가 전달되지 않아도 /status 로 미확정 노드를 다시 볼 수 있게 파일에 남긴다.
+		//// 노드가 /bind · /addnode 로 연결되면 지운다. 안내를 다시 보내려고 토픽을 다시 만들지는 않는다.
+		private static string AddNodeIssuesPath
+		{
+			get { return Path.Combine(HubConfig.DataFolder, "addnode_issues.txt"); }
+		}
+
+		internal static Dictionary<string, string> ReadAddNodeIssues()
+		{
+			Dictionary<string, string> d = new Dictionary<string, string>();
+			try
+			{
+				if (File.Exists(AddNodeIssuesPath))
+				{
+					foreach (string line in File.ReadAllLines(AddNodeIssuesPath, Encoding.UTF8))
+					{
+						int tab = line.IndexOf('\t');
+						if (tab > 0)
+						{
+							d[line.Substring(0, tab)] = line.Substring(tab + 1);
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				HubLog.Warn("addnode issues : read failed - " + ex.Message);
+			}
+			return d;
+		}
+
+		//// what = null 이면 지운다
+		internal static void SetAddNodeIssue(string node, string what)
+		{
+			try
+			{
+				Dictionary<string, string> d = ReadAddNodeIssues();
+				if (what == null)
+				{
+					if (d.Remove(node) == false)
+					{
+						return;
+					}
+				}
+				else
+				{
+					d[node] = DateTime.Now.ToString("MM-dd HH:mm") + " " + what;
+				}
+				Directory.CreateDirectory(HubConfig.DataFolder);
+				File.WriteAllLines(AddNodeIssuesPath, d.Select(kv => kv.Key + "\t" + kv.Value), new UTF8Encoding(false));
+			}
+			catch (Exception ex)
+			{
+				HubLog.Warn("addnode issues : write failed (" + node + ") - " + ex.Message);
+			}
+		}
+
+		//// /addnode - 노드마다 토픽을 만들고 토픽 표에 넣는다(설계 H2). 이미 연결된 노드는 건너뛰어 재처리에도 다시 만들지 않는다.
+		private void AddNodes(string arg, Action<string> say)
+		{
+			List<string> bad = new List<string>();
+			List<string> names = ParseNodeList(arg, bad);
+			if (names.Count == 0 && bad.Count == 0)
+			{
+				say("쓰는 법 : /addnode D1 D252-TM (대문자 · 숫자 · 하이픈, 16 자 이하, 한 번에 " + MaxAddNodes + " 개까지)");
+				return;
+			}
+			if (names.Count > MaxAddNodes)
+			{
+				say("한 번에 " + MaxAddNodes + " 개까지입니다(" + names.Count + " 개). 나눠 보내 주세요.");
+				return;
+			}
+			TelegramClient tg = Tg();
+			if (tg == null)
+			{
+				say("토큰이 없어 토픽을 만들 수 없습니다.");
+				return;
+			}
+			List<string> lines = new List<string>();
+			foreach (string b in bad)
+			{
+				lines.Add(b + " : 이름 규칙 위반(대문자 · 숫자 · 하이픈, 16 자 이하)");
+			}
+			bool limited = false;
+			foreach (string node in names)
+			{
+				if (limited)
+				{
+					lines.Add(node + " : 만들지 않음 - 잠시 뒤 /addnode " + node + " 를 다시");
+					continue;
+				}
+				if (_c.ThreadOfNode(node) != 0)
+				{
+					lines.Add(node + " : 이미 있음");
+					continue;
+				}
+				long newThread;
+				try
+				{
+					newThread = tg.CreateForumTopic(_c.ChatId, node);
+				}
+				catch (RetryAfterException ex)
+				{
+					HubLog.Warn("addnode " + node + " : " + ex.Message);
+					lines.Add(node + " : 텔레그램 속도 제한 - " + ex.Seconds + " 초 뒤 다시 보내 주세요");
+					limited = true;
+					continue;
+				}
+				catch (TelegramUnknownReplyException ex)
+				{
+					HubLog.Warn("addnode " + node + " : result unknown - " + ex.Message);
+					lines.Add(node + " : 생성 여부 불명(응답 해석 불가) - 그룹에 " + node + " 토픽이 생겼으면 그 토픽에서 /bind " + node + ", 없으면 /addnode " + node + " 를 다시");
+					SetAddNodeIssue(node, "생성 여부 불명(응답 해석 불가)");
+					limited = true;
+					continue;
+				}
+				catch (TelegramException ex)
+				{
+					HubLog.Warn("addnode " + node + " : " + ex.Message);
+					lines.Add(node + " : 실패 - " + ex.Message + " (봇에 \"주제 관리\" 권한이 있는지 확인)");
+					continue;
+				}
+				catch (Exception ex)
+				{
+					//// 응답을 못 받았다 - 서버가 만들었을 수도 있다(설계 리뷰). 다시 만들지 말고 확인 후 /bind 로 잇게 한다. 뒤 노드는 멈춘다.
+					HubLog.Warn("addnode " + node + " : result unknown - " + ex.Message);
+					lines.Add(node + " : 생성 여부 불명(응답 없음) - 그룹에 " + node + " 토픽이 생겼으면 그 토픽에서 /bind " + node + ", 없으면 /addnode " + node + " 를 다시");
+					SetAddNodeIssue(node, "생성 여부 불명(응답 없음)");
+					limited = true;
+					continue;
+				}
+				if (newThread <= 0)
+				{
+					//// 성공 응답인데 토픽 ID 가 없다 - 만들어졌을 수 있다. 응답 없음과 같이 불명으로 보고 뒤 노드를 멈춘다(코드 리뷰).
+					HubLog.Warn("addnode " + node + " : result unknown - ok reply without message_thread_id");
+					lines.Add(node + " : 생성 여부 불명(토픽 ID 없음) - 그룹에 " + node + " 토픽이 생겼으면 그 토픽에서 /bind " + node + ", 없으면 /addnode " + node + " 를 다시");
+					SetAddNodeIssue(node, "생성 여부 불명(토픽 ID 없음)");
+					limited = true;
+					continue;
+				}
+				//// 연결 성공 = hub.json 저장 성공. 저장이 실패하면 메모리 표를 되돌리고 그 토픽에서 /bind 하게 한다(설계 리뷰).
+				string saveError = null;
+				lock (_c.Sync)
+				{
+					Dictionary<string, string> before = new Dictionary<string, string>(_c.Topics);
+					foreach (string k in _c.Topics.Where(kv => kv.Value == node).Select(kv => kv.Key).ToList()) { _c.Topics.Remove(k); }
+					_c.Topics[newThread.ToString()] = node;
+					try
+					{
+						_c.Save();
+					}
+					catch (Exception ex)
+					{
+						_c.Topics = before;
+						saveError = ex.Message;
+					}
+				}
+				if (saveError != null)
+				{
+					HubLog.Error("addnode " + node + " : topic " + newThread + " created but hub.json save failed - " + saveError);
+					SendSafe(tg, _c.ChatId, newThread, "🛰 [허브] 이 토픽은 만들었지만 설정 저장에 실패했습니다. 이 토픽에서 /bind " + node + " 를 보내 주세요.", 0);
+					lines.Add(node + " : 토픽은 만들었지만 설정 저장 실패 - 그 토픽에서 /bind " + node);
+					SetAddNodeIssue(node, "토픽 " + newThread + " 만듦 · 설정 저장 실패");
+					continue;
+				}
+				_reportsDirty = true;
+				HubLog.Info("addnode " + node + " -> topic " + newThread);
+				SendSafe(tg, _c.ChatId, newThread, "🛰 [허브] 이 토픽 = " + node + ". 그 PC 의 tg_node.txt 에 " + node + " 를 적어야 지시가 갑니다.", 0);
+				lines.Add(node + " : 만듦");
+				SetAddNodeIssue(node, null);
+			}
+			say("노드 토픽\n" + string.Join("\n", lines));
+		}
+
 		private void Command(string t, long thread, long msgId, Dictionary<string, object> m, List<LedgerRecord> recs, Action<string> say)
 		{
 			string[] parts = t.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
@@ -317,7 +527,13 @@ namespace FTeleHub
 						_c.Save();
 					}
 					_reportsDirty = true;
+					SetAddNodeIssue(node, null);
 					say("이 토픽 = " + node + ". 그 PC 의 tg_node.txt 에 " + node + " 를 적어야 지시가 갑니다.");
+					return;
+				}
+				case "/addnode":
+				{
+					AddNodes(arg, say);
 					return;
 				}
 				case "/pause":
@@ -402,11 +618,16 @@ namespace FTeleHub
 				{
 					List<KeyValuePair<string, string>> topics = _c.TopicsSnapshot();
 					string nodes = topics.Count > 0 ? "\n노드 : " + string.Join(", ", topics.Select(kv => kv.Value + "(회신 대기 " + AwaitingCount(kv.Value) + ")")) : "\n등록된 노드 없음";
+					Dictionary<string, string> issues = ReadAddNodeIssues();
+					if (issues.Count > 0)
+					{
+						nodes += "\n토픽 미확정(그룹에서 확인 후 그 토픽에서 /bind) : " + string.Join(", ", issues.Select(kv => kv.Key + " - " + kv.Value));
+					}
 					say(StatusLine + nodes);
 					return;
 				}
 				default:
-					say("모르는 명령입니다. /status · /pause · /resume · /deliver tg-N · /drop tg-N · /cancel(답글) · /bind <노드> · /whoami");
+					say("모르는 명령입니다. /status · /pause · /resume · /deliver tg-N · /drop tg-N · /cancel(답글) · /bind <노드> · /addnode <노드…> · /whoami");
 					return;
 			}
 		}

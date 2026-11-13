@@ -52,14 +52,19 @@ namespace FTeleHub
 			_timer.Tick += (s, e) => RefreshUi();
 			_timer.Start();
 
-			//// 처음 설치 때 자동 실행 기본 켬(H10)
-			string marker = Path.Combine(HubConfig.DataFolder, "autostart_default_done");
-			if (File.Exists(marker) == false)
+			//// 처음 설치 때 자동 실행 기본 켬(H10). 등록이 확인됐을 때만 표식을 남긴다 - 실패는 로그 · 다음 시작 때 다시(2026-11-13 실측).
+			//// 등록 직후 표식 전에 꺼졌다면 다음 시작에서 기존 작업을 확인하고 표식만 남긴다. 사용자가 메뉴로 바꾸면 그때 표식을 남긴다.
+			if (File.Exists(AutostartMarker) == false)
 			{
-				string err;
-				if (Autostart.IsEnabled() == false) { Autostart.Enable(Application.ExecutablePath, out err); }
-				Directory.CreateDirectory(HubConfig.DataFolder);
-				File.WriteAllText(marker, DateTime.Now.ToString("s"));
+				string err = string.Empty;
+				if (Autostart.IsEnabled() || Autostart.Enable(Application.ExecutablePath, out err))
+				{
+					WriteAutostartMarker("default-on");
+				}
+				else
+				{
+					HubLog.Warn("autostart : default enable failed - " + err);
+				}
 			}
 
 			RefreshUi();
@@ -131,11 +136,45 @@ namespace FTeleHub
 			RefreshUi();
 		}
 
+		private static string AutostartMarker
+		{
+			get { return Path.Combine(HubConfig.DataFolder, "autostart_default_done"); }
+		}
+
+		private static bool WriteAutostartMarker(string why)
+		{
+			try
+			{
+				Directory.CreateDirectory(HubConfig.DataFolder);
+				File.WriteAllText(AutostartMarker, DateTime.Now.ToString("s") + " " + why);
+				HubLog.Info("autostart : " + why);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				HubLog.Warn("autostart : marker write failed - " + ex.Message);
+				return false;
+			}
+		}
+
 		private void ToggleAutostart()
 		{
 			string err;
-			bool ok = Autostart.IsEnabled() ? Autostart.Disable(out err) : Autostart.Enable(Application.ExecutablePath, out err);
-			if (ok == false) { MessageBox.Show("자동 실행 설정을 바꾸지 못했습니다.\n" + err, "SDLS 텔레그램 허브", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+			bool wasOn = Autostart.IsEnabled();
+			bool ok = wasOn ? Autostart.Disable(out err) : Autostart.Enable(Application.ExecutablePath, out err);
+			if (ok)
+			{
+				//// 사용자가 정한 뒤로는 기본 켬을 다시 하지 않는다. 그 선택을 저장하지 못하면 알린다(코드 리뷰 - 끈 것이 다음 시작에 다시 켜질 수 있음).
+				if (WriteAutostartMarker(wasOn ? "user-off" : "user-on") == false && wasOn)
+				{
+					MessageBox.Show("자동 실행은 껐지만 이 선택을 저장하지 못했습니다(데이터 폴더 쓰기 실패).\n다음에 허브를 시작하면 자동 실행이 다시 켜질 수 있습니다. 로그를 확인해 주세요.", "SDLS 텔레그램 허브", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				}
+			}
+			else
+			{
+				HubLog.Warn("autostart : toggle failed - " + err);
+				MessageBox.Show("자동 실행 설정을 바꾸지 못했습니다.\n" + err, "SDLS 텔레그램 허브", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			}
 			_miAuto.Checked = Autostart.IsEnabled();
 		}
 

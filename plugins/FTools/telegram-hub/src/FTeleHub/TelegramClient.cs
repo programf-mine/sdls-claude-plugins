@@ -6,7 +6,7 @@ using System.Web.Script.Serialization;
 
 namespace FTeleHub
 {
-	//// 텔레그램 Bot API 최소 구현 - getUpdates(롱폴링) · sendMessage. 토큰은 URL 에만 들어가며 예외 문구는 HubLog 가 가린다.
+	//// 텔레그램 Bot API 최소 구현 - getUpdates(롱폴링) · sendMessage · createForumTopic. 토큰은 URL 에만 들어가며 예외 문구는 HubLog 가 가린다.
 	internal sealed class TelegramClient : IDisposable
 	{
 		private readonly HttpClient _http;
@@ -53,6 +53,15 @@ namespace FTeleHub
 			return m != null && m.ContainsKey("message_id") ? Convert.ToInt64(m["message_id"]) : 0;
 		}
 
+		//// 반환 : 새 토픽의 message_thread_id (/addnode). 봇에 "주제 관리" 권한이 있어야 한다.
+		public long CreateForumTopic(long chatId, string name)
+		{
+			Dictionary<string, object> body = new Dictionary<string, object> { { "chat_id", chatId }, { "name", name } };
+			Dictionary<string, object> r = Call("createForumTopic", body);
+			Dictionary<string, object> t = r["result"] as Dictionary<string, object>;
+			return t != null && t.ContainsKey("message_thread_id") ? Convert.ToInt64(t["message_thread_id"]) : 0;
+		}
+
 		private Dictionary<string, object> Call(string method, Dictionary<string, object> body)
 		{
 			using (StringContent c = new StringContent(_json.Serialize(body), Encoding.UTF8, "application/json"))
@@ -60,9 +69,11 @@ namespace FTeleHub
 			{
 				string text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 				Dictionary<string, object> r = _json.Deserialize<Dictionary<string, object>>(text);
-				if (r == null) { throw new TelegramException(method + " : empty reply (HTTP " + (int)resp.StatusCode + ")"); }
+				//// 응답이 비었거나 ok 가 없으면 서버가 처리했는지 알 수 없다 - 확정 실패(ok=false)와 나눈다(코드 리뷰 - /addnode 생성 여부 불명)
+				if (r == null) { throw new TelegramUnknownReplyException(method + " : empty reply (HTTP " + (int)resp.StatusCode + ")"); }
 				object ok;
-				if (r.TryGetValue("ok", out ok) && ok is bool && (bool)ok) { return r; }
+				if (r.TryGetValue("ok", out ok) == false || (ok is bool) == false) { throw new TelegramUnknownReplyException(method + " : reply without ok (HTTP " + (int)resp.StatusCode + ")"); }
+				if ((bool)ok) { return r; }
 				int retry = 0;
 				object prm;
 				if (r.TryGetValue("parameters", out prm) && prm is Dictionary<string, object> p && p.ContainsKey("retry_after")) { retry = Convert.ToInt32(p["retry_after"]); }
@@ -76,6 +87,12 @@ namespace FTeleHub
 	internal class TelegramException : Exception
 	{
 		public TelegramException(string m) : base(m) { }
+	}
+
+	//// 응답을 해석할 수 없음 - 요청이 처리됐는지 모른다. TelegramException 을 잡는 기존 경로(보고 전송)는 그대로 실패로 다룬다.
+	internal sealed class TelegramUnknownReplyException : TelegramException
+	{
+		public TelegramUnknownReplyException(string m) : base(m) { }
 	}
 
 	internal sealed class RetryAfterException : TelegramException

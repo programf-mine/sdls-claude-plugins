@@ -86,6 +86,17 @@ namespace FTeleHub
 
 			Check("node name rule", HubConfig.IsValidNode("D252-TM") && HubConfig.IsValidNode("d1") == false && HubConfig.IsValidNode("TOO-LONG-NODE-NAME") == false);
 
+			//// /addnode 인수 · 서비스 메시지 판정 (2026-11-13)
+			List<string> badNames = new List<string>();
+			List<string> nl = HubEngine.ParseNodeList("d1, D252-TM  d1 bad_name TOO-LONG-NODE-NAME", badNames);
+			Check("addnode : upper-case, order kept, duplicates removed", nl.Count == 2 && nl[0] == "D1" && nl[1] == "D252-TM", string.Join(",", nl));
+			Check("addnode : invalid names reported", badNames.Count == 2 && badNames.Contains("bad_name") && badNames.Contains("TOO-LONG-NODE-NAME"), string.Join(",", badNames));
+			Check("addnode : empty argument -> nothing", HubEngine.ParseNodeList("  ", new List<string>()).Count == 0);
+			Dictionary<string, object> svc = new Dictionary<string, object> { { "message_id", 1L }, { "forum_topic_created", new Dictionary<string, object>() } };
+			Dictionary<string, object> photo = new Dictionary<string, object> { { "message_id", 2L }, { "photo", new object[0] } };
+			Check("service message (topic created) is not user content", HubEngine.HasUserContent(svc) == false);
+			Check("photo is user content", HubEngine.HasUserContent(photo));
+
 			//// 아이콘 : 상태 5 가지 × 밝음 · 어두움 × 16 · 24 · 32 PNG
 			foreach (HubState st in Enum.GetValues(typeof(HubState)))
 			{
