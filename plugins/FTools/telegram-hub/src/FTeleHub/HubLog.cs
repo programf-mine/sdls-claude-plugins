@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 허브 로그 - 날짜별 파일. 토큰 · 본문 전체는 쓰지 않는다(T8). 사용자 글은 길이만.
 	internal static class HubLog

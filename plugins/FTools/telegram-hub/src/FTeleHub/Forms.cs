@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// SDLS 팔레트 - 바탕 #FAF4FF, 글자 #2A2433, 머리 #3C1464, 강조 #7A52B3
 	internal static class Palette

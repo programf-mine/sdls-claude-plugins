@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 허브 처리 흐름(H2 · H3 · H5 · H7 · H8). 스레드 둘 : 받기(롱폴링) · 보내기(보고 조회 · 전달 재시도).
 	//// 깃 작업은 _gitLock 하나로 줄 세운다(전용 클론 하나). 설정 · 토픽은 _c.Sync, 장부는 Ledger 내부 잠금.

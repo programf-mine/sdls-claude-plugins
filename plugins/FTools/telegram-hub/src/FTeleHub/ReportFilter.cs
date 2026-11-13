@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 보내기 직전 거르기(H5) - 보조 방어. 알려진 형식만 가린다. 공개 여부의 책임은 쓰는 세션(S2).
 	internal static class ReportFilter

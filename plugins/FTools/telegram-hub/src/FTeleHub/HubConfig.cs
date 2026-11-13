@@ -5,9 +5,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
-	//// hub.json - %LOCALAPPDATA%\SDOPTICS\TelegramHub\hub.json. 토큰은 DPAPI(CurrentUser) 로만 저장(H6 - 저장 상태 보호).
+	//// hub.json - %LOCALAPPDATA%\SDOPTICS\FTeleHub\hub.json. 토큰은 DPAPI(CurrentUser) 로만 저장(H6 - 저장 상태 보호).
 	internal sealed class HubConfig
 	{
 		public string TokenProtected;					//// base64(DPAPI)
@@ -27,7 +27,7 @@ namespace SdoTelegramHub
 
 		public static string DataFolder
 		{
-			get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SDOPTICS", "TelegramHub"); }
+			get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SDOPTICS", "FTeleHub"); }
 		}
 
 		public static string ConfigPath
@@ -99,7 +99,7 @@ namespace SdoTelegramHub
 
 		private string _cachedToken;
 		private static string _lastToken;
-		private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SDOPTICS.SdoTelegramHub.v1");
+		private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SDOPTICS.FTeleHub.v1");
 
 		//// 로그 · 오류 문구에 토큰이 섞이지 않게(HTTP 오류 메시지에 URL 이 들어갈 수 있다)
 		public static string MaskToken(string s)

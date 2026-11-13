@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 세션 보고 항목(§4-0 · S2) : "## [시각] <종류> [tg-N] r-<노드>-<yyyyMMddHHmmss>-<4 자> - <공개용 한 줄>" + 선택 "- 공개 : …" 줄
 	internal sealed class ReportEntry

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 허브 전용 클론(H1 · H3) - relay 폴더만 sparse. 무인 실행(입력 대기 없음), 명령당 120 s.
 	internal sealed class GitRelay
@@ -63,7 +63,7 @@ namespace SdoTelegramHub
 			foreach (string p in relPaths) { Run(RepoPath, "add -- \"" + p + "\""); }
 			string msgFile = Path.Combine(HubConfig.DataFolder, "commitmsg.txt");
 			File.WriteAllText(msgFile, message, new UTF8Encoding(false));
-			Run(RepoPath, "-c user.name=SdoTelegramHub -c user.email=telegram-hub@sdoptics.local commit --quiet -F \"" + msgFile + "\"");
+			Run(RepoPath, "-c user.name=FTeleHub -c user.email=ftelehub@sdoptics.local commit --quiet -F \"" + msgFile + "\"");
 			Run(RepoPath, "push --quiet origin HEAD:" + _c.Branch);
 		}
 

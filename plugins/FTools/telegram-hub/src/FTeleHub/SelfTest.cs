@@ -5,7 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Text;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// --selftest [출력 폴더] : 보고 파서 · 메시지 형식 · 거르기 · 지시 항목 · 장부(손상 줄) · 아이콘 그리기.
 	//// 결과는 <출력 폴더>\selftest.txt(종료 코드 = 실패 수), 아이콘 PNG 도 같은 폴더에.
@@ -22,7 +22,7 @@ namespace SdoTelegramHub
 
 		public static int Run(string folder)
 		{
-			folder = folder ?? Path.Combine(Path.GetTempPath(), "SdoTelegramHub_selftest");
+			folder = folder ?? Path.Combine(Path.GetTempPath(), "FTeleHub_selftest");
 			Directory.CreateDirectory(folder);
 			_out = new StringBuilder();
 

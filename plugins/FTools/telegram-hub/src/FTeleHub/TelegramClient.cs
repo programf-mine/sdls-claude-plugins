@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Web.Script.Serialization;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 텔레그램 Bot API 최소 구현 - getUpdates(롱폴링) · sendMessage. 토큰은 URL 에만 들어가며 예외 문구는 HubLog 가 가린다.
 	internal sealed class TelegramClient : IDisposable

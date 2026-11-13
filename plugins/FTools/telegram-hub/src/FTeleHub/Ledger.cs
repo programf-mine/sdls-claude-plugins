@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Web.Script.Serialization;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 허브 장부(H3) - 사건을 덧붙이기만 하는 JSON Lines. 쓸 때마다 Flush(true) 로 디스크에 확정한다.
 	//// 사건 : received(본문 포함) · held(일시정지 중 수신) · delivered · dropped · noreply

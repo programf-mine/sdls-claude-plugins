@@ -5,7 +5,7 @@ using System.IO;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// 트레이(H9) - 창 없이 NotifyIcon 과 메뉴. 상태가 바뀌면 아이콘 · 툴팁을 다시 그린다.
 	internal sealed class HubContext : ApplicationContext

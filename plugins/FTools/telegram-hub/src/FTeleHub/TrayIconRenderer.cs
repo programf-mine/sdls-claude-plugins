@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	internal enum HubState { Normal, NewItem, Paused, Warn, Offline }
 

@@ -2,11 +2,11 @@ using System;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
 	//// SDLS 텔레그램 허브 - 트레이 상주. 설계 : SDLS 00B. DOC/003. Claude/Automation/relay/ResidentAgent_Telegram_Design.html
-	//// 사용 : SdoTelegramHub.exe            트레이 실행(PC 당 하나 - 뮤텍스)
-	////       SdoTelegramHub.exe --selftest 파서 · 거르기 · 장부 자체 시험(콘솔 출력 없이 결과 파일)
+	//// 사용 : FTeleHub.exe            트레이 실행(PC 당 하나 - 뮤텍스)
+	////       FTeleHub.exe --selftest 파서 · 거르기 · 장부 자체 시험(콘솔 출력 없이 결과 파일)
 	internal static class Program
 	{
 		[STAThread]
@@ -18,7 +18,7 @@ namespace SdoTelegramHub
 			}
 
 			bool created;
-			using (Mutex m = new Mutex(true, @"Local\SdoTelegramHub", out created))
+			using (Mutex m = new Mutex(true, @"Local\FTeleHub", out created))
 			{
 				if (created == false)
 				{

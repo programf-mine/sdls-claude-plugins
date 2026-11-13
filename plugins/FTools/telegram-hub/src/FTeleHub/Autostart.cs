@@ -5,13 +5,13 @@ using System.Security;
 using System.Security.Principal;
 using System.Text;
 
-namespace SdoTelegramHub
+namespace FTeleHub
 {
-	//// Windows 시작 시 자동 실행(H10) - 작업 스케줄러 \SDOPTICS\SdoTelegramHub. 관리자 권한 없이 현재 사용자 작업으로 등록.
+	//// Windows 시작 시 자동 실행(H10) - 작업 스케줄러 \SDOPTICS\FTeleHub. 관리자 권한 없이 현재 사용자 작업으로 등록.
 	//// 트리거 : 로그온 · 절전 해제(Power-Troubleshooter 1). 실패 시 1 분 뒤 최대 3 회. 로그온한 경우에만 실행.
 	internal static class Autostart
 	{
-		public const string TaskName = @"\SDOPTICS\SdoTelegramHub";
+		public const string TaskName = @"\SDOPTICS\FTeleHub";
 
 		public static bool IsEnabled()
 		{

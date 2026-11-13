@@ -6,8 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{6B1F2C3A-7D45-4E8B-9A21-5C3D8E7F1A02}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>SdoTelegramHub</RootNamespace>
-    <AssemblyName>SdoTelegramHub</AssemblyName>
+    <RootNamespace>FTeleHub</RootNamespace>
+    <AssemblyName>FTeleHub</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <LangVersion>7.3</LangVersion>
     <FileAlignment>512</FileAlignment>
