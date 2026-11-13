@@ -10,7 +10,7 @@
       "name": "FTools",
       "source": "./plugins/FTools",
       "description": "SDLS team development tools — screen capture automation library, manual writing conventions, and verification helpers for WinForms-based SDLS UI work.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }
