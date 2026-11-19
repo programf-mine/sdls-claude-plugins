@@ -8,10 +8,18 @@ namespace FTeleHub
 	internal static class HubLog
 	{
 		private static readonly object _lock = new object();
+		private static volatile string _folderOverride;
 
 		public static string Folder
 		{
-			get { return Path.Combine(HubConfig.DataFolder, "log"); }
+			get { string o = _folderOverride; return o ?? Path.Combine(HubConfig.DataFolder, "log"); }
+		}
+
+		//// 자가 시험 전용 - 시험 줄이 돌고 있는 허브의 로그(hub_<날짜>.log)에 섞이지 않게 로그 폴더를 시험 출력 폴더로 돌린다.
+		//// 프로세스 안에서 한 번, 첫 로그 줄 전에 부른다(--selftest 는 허브 엔진을 띄우지 않는 별도 실행).
+		public static void RedirectForSelfTest(string folder)
+		{
+			_folderOverride = folder;
 		}
 
 		public static void Info(string msg) { Write("INFO", msg); }

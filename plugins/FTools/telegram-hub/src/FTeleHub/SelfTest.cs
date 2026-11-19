@@ -14,6 +14,13 @@ namespace FTeleHub
 		private static int _pass, _fail;
 		private static StringBuilder _out;
 
+		//// 돌고 있는 허브가 같은 파일에 쓰는 중이어도 읽는다
+		private static string ReadShared(string path)
+		{
+			using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+			using (StreamReader r = new StreamReader(fs, Encoding.UTF8)) { return r.ReadToEnd(); }
+		}
+
 		private static void Check(string name, bool ok, string detail = "")
 		{
 			if (ok) { _pass++; } else { _fail++; }
@@ -25,6 +32,24 @@ namespace FTeleHub
 			folder = folder ?? Path.Combine(Path.GetTempPath(), "FTeleHub_selftest");
 			Directory.CreateDirectory(folder);
 			_out = new StringBuilder();
+			//// 시험 줄은 <출력 폴더>\log 로 - 돌고 있는 허브 로그에 시험 알림 줄이 섞여 실제 알림처럼 보이던 것(11-19 관찰)
+			string realLog = HubLog.Folder;
+			string testLog = Path.Combine(folder, "log");
+			//// 출력 폴더를 허브 데이터 폴더로 주면 두 경로가 같아진다 - 첫 기록 전에 멈춘다(코드 리뷰 R1)
+			if (string.Equals(Path.GetFullPath(realLog).TrimEnd('\\'), Path.GetFullPath(testLog).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+			{
+				Check("log : output folder is not the hub data folder", false, "self-test refused - choose another output folder than " + folder);
+				File.WriteAllText(Path.Combine(folder, "selftest.txt"), _out.ToString() + "== RESULT selftest pass 0 / fail 1 ==" + Environment.NewLine, new UTF8Encoding(true));
+				return 1;
+			}
+			HubLog.RedirectForSelfTest(testLog);
+			string marker = "selftest log marker " + Guid.NewGuid().ToString("N");
+			HubLog.Info(marker);
+			string todayName = "hub_" + DateTime.Now.ToString("yyyyMMdd") + ".log";
+			string testFile = Path.Combine(testLog, todayName);
+			string realFile = Path.Combine(realLog, todayName);
+			Check("log : self-test lines go to the test folder", File.Exists(testFile) && File.ReadAllText(testFile).Contains(marker), testFile);
+			Check("log : real hub log untouched", string.Equals(Path.GetFullPath(realLog), Path.GetFullPath(testLog), StringComparison.OrdinalIgnoreCase) == false && (File.Exists(realFile) == false || ReadShared(realFile).Contains(marker) == false), realFile);
 
 			string md = "# D1 → 사용자\n\n## [2026-11-13 14:05] 읽음 tg-812345 r-D1-20261113140501-a7f2\n\n## [2026-11-13 14:20] 완료 tg-812345 r-D1-20261113142011-b001 - 스캔 시험 끝, 모두 통과\n- 공개 : 다음은 전송 시험\n- 세부 : D:\\Data\\x.bmp 98/0\n\n## [2026-11-13 14:20] 보고 r-D252-TM-20261113142011-c9z1 - 같은 시각 같은 제목\n## [2026-11-13 14:20] 보고 r-D252-TM-20261113142012-d0z1 - 같은 시각 같은 제목\n## [2026-11-13 14:30] 회신 tg-1 - 형식 틀린 머리줄(보고 ID 없음)\n";
 			List<ReportEntry> es = RelayEntries.ParseReports(md);
