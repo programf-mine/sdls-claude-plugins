@@ -53,6 +53,8 @@
     <Compile Include="HubContext.cs" />
     <Compile Include="Forms.cs" />
     <Compile Include="SelfTest.cs" />
+    <Compile Include="RelayIdle.cs" />
+    <Compile Include="SelfTestIdle.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.manifest" />

@@ -13,10 +13,15 @@ namespace FTeleHub
 		private readonly string _token;
 		private readonly JavaScriptSerializer _json = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
 
-		public TelegramClient(string token)
+		public TelegramClient(string token) : this(token, 75)
+		{
+		}
+
+		//// [§11-2 J10] 미처리 알림 전용 클라이언트는 짧은 제한(초)으로 만든다 - 롱폴링 클라이언트와 따로.
+		public TelegramClient(string token, int timeoutSeconds)
 		{
 			_token = token;
-			_http = new HttpClient { Timeout = TimeSpan.FromSeconds(75) };
+			_http = new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
 		}
 
 		public void Dispose() { _http.Dispose(); }

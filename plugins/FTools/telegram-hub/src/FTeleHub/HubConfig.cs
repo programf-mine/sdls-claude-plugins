@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -22,6 +23,8 @@ namespace FTeleHub
 		public long LastUpdateId;						//// 확정한 마지막 update_id(offset = +1)
 		public bool BaselineDone;						//// 설치 때 기존 보고를 sent 로 잡았는가
 		public string LastAlive;						//// 마지막 동작 시각(재개 알림의 멈춤 시간 - H8)
+		public int IdleMinutes = 10;					//// [§11 I3] 미처리 알림 기준(분). 0 = 끔
+		public Dictionary<string, List<string>> RelayNodes;	//// [§11 I4] 릴레이 이름 → 노드. null 이면 기본 표
 
 		private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
 
@@ -136,6 +139,51 @@ namespace FTeleHub
 		public List<KeyValuePair<string, string>> TopicsSnapshot()
 		{
 			lock (Sync) { return new List<KeyValuePair<string, string>>(Topics); }
+		}
+
+		//// [§11 I4] 기본 표 - P2 는 VM · TM 두 세션이 같은 채널(prod2) 을 본다
+		internal static Dictionary<string, List<string>> DefaultRelayNodes()
+		{
+			return new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
+			{
+				{ "laptop", new List<string> { "LAPTOP" } },
+				{ "o1", new List<string> { "O1" } },
+				{ "demo1", new List<string> { "D1" } },
+				{ "d252", new List<string> { "D252-TM" } },
+				{ "prod2", new List<string> { "P2-VM", "P2-TM" } },
+			};
+		}
+
+		//// 표 스냅샷(검사 한 번 동안 같은 표를 본다)
+		public Dictionary<string, List<string>> RelayNodesSnapshot()
+		{
+			lock (Sync)
+			{
+				Dictionary<string, List<string>> src = RelayNodes ?? DefaultRelayNodes();
+				Dictionary<string, List<string>> d = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+				foreach (KeyValuePair<string, List<string>> kv in src)
+				{
+					if (kv.Key != null && kv.Value != null) { d[kv.Key] = new List<string>(kv.Value); }
+				}
+				return d;
+			}
+		}
+
+		//// 릴레이 이름 → 노드(표에 없으면 빈 목록 - 그 채널은 건너뛴다)
+		public List<string> NodesOfRelay(string relayName)
+		{
+			lock (Sync)
+			{
+				Dictionary<string, List<string>> map = RelayNodes ?? DefaultRelayNodes();
+				foreach (KeyValuePair<string, List<string>> kv in map)
+				{
+					if (string.Equals(kv.Key, relayName, StringComparison.OrdinalIgnoreCase) && kv.Value != null)
+					{
+						return kv.Value.Where(IsValidNode).ToList();
+					}
+				}
+				return new List<string>();
+			}
 		}
 
 		//// 노드 이름 규칙(§4-0) : 대문자 · 숫자 · 하이픈, 16 자 이하

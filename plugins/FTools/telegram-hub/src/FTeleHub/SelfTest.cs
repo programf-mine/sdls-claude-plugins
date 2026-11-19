@@ -97,6 +97,12 @@ namespace FTeleHub
 			Check("service message (topic created) is not user content", HubEngine.HasUserContent(svc) == false);
 			Check("photo is user content", HubEngine.HasUserContent(photo));
 
+			//// §11 미처리 알림
+			foreach (string line in SelfTestIdle.Run(folder))
+			{
+				Check(line.Substring(1), line[0] == '+');
+			}
+
 			//// 아이콘 : 상태 5 가지 × 밝음 · 어두움 × 16 · 24 · 32 PNG
 			foreach (HubState st in Enum.GetValues(typeof(HubState)))
 			{

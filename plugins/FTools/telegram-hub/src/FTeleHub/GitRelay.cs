@@ -49,6 +49,12 @@ namespace FTeleHub
 			Run(RepoPath, "clean -fdq");
 		}
 
+		//// [§11-2 J10] 미처리 검사용 - origin/<branch> 만 받는다(작업 트리는 건드리지 않는다), 제한 시간 안에서
+		public void Fetch(int timeoutMs)
+		{
+			Run(RepoPath, "fetch --quiet origin " + _c.Branch, timeoutMs);
+		}
+
 		//// 원격(origin/<branch>) 커밋의 파일 내용. 파일이 없으면 빈 문자열.
 		public string RemoteFile(string relPath)
 		{
@@ -69,6 +75,20 @@ namespace FTeleHub
 
 		public string Run(string cwd, string args)
 		{
+			return Run(cwd, args, 120000, false);
+		}
+
+		//// [§11-2 J10] timeoutMs : 이 명령 전체(종료 + 출력 수집) 의 제한. 미처리 검사가 남은 시간을 넘긴다.
+		//// 출력을 제한 안에 다 모으지 못하면 시간 초과로 실패한다(빈 출력을 정상 결과로 쓰지 않게 - 코드 리뷰 R1 4 회차).
+		public string Run(string cwd, string args, int timeoutMs)
+		{
+			return Run(cwd, args, timeoutMs, true);
+		}
+
+		private string Run(string cwd, string args, int timeoutMs, bool strict)
+		{
+			timeoutMs = Math.Max(200, Math.Min(timeoutMs, 120000));
+			Stopwatch sw = Stopwatch.StartNew();
 			ProcessStartInfo psi = new ProcessStartInfo("git", args)
 			{
 				WorkingDirectory = cwd, UseShellExecute = false, CreateNoWindow = true,
@@ -83,14 +103,28 @@ namespace FTeleHub
 				//// 두 출력 모두 비동기로 읽고 프로세스 종료만 기다린다 - stdout 을 동기로 읽으면 120 s 제한이 걸리지 않는다(코드 리뷰 ④)
 				System.Threading.Tasks.Task<string> err = p.StandardError.ReadToEndAsync();
 				System.Threading.Tasks.Task<string> outp = p.StandardOutput.ReadToEndAsync();
-				if (p.WaitForExit(120000) == false)
+				if (p.WaitForExit(timeoutMs) == false)
 				{
 					try { p.Kill(); } catch (InvalidOperationException) { } catch (System.ComponentModel.Win32Exception) { }
-					throw new GitException("git " + FirstWord(args) + " : timed out after 120 s");
+					throw new GitException("git " + FirstWord(args) + " : timed out after " + (timeoutMs / 1000) + " s");
 				}
 				p.WaitForExit();
-				string outText = outp.Wait(5000) ? outp.Result : string.Empty;
-				string errText = err.Wait(5000) ? err.Result : string.Empty;
+				string outText, errText;
+				if (strict)
+				{
+					int rest = Math.Max(1, timeoutMs - (int)sw.ElapsedMilliseconds);
+					if (System.Threading.Tasks.Task.WaitAll(new System.Threading.Tasks.Task[] { outp, err }, rest) == false)
+					{
+						throw new GitException("git " + FirstWord(args) + " : timed out collecting output after " + timeoutMs + " ms");
+					}
+					outText = outp.Result;
+					errText = err.Result;
+				}
+				else
+				{
+					outText = outp.Wait(5000) ? outp.Result : string.Empty;
+					errText = err.Wait(5000) ? err.Result : string.Empty;
+				}
 				if (p.ExitCode != 0) { throw new GitException("git " + FirstWord(args) + " exit " + p.ExitCode + " : " + errText.Trim()); }
 				return outText;
 			}

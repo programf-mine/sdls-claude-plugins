@@ -24,6 +24,8 @@ namespace FTeleHub
 		private DateTime _lastTelegramOk = DateTime.MinValue, _lastGithubOk = DateTime.MinValue, _lastNoReplyCheck = DateTime.MinValue;
 		private DateTime _lastTick = DateTime.Now;
 		private readonly DateTime _started = DateTime.Now;
+		private DateTime _lastIdleCheck = DateTime.MinValue;
+		private RelayIdle _idle;		//// [§11] 미처리 알림 - 보내기 스레드에서만 쓴다
 		private readonly HashSet<string> _tgSeen = new HashSet<string>(StringComparer.Ordinal);		//// 회신(무엇이든) 받은 지시
 		private readonly HashSet<string> _tgDone = new HashSet<string>(StringComparer.Ordinal);		//// 완료 · 취소됨 받은 지시
 		private volatile bool _announcePending = true;
@@ -135,6 +137,9 @@ namespace FTeleHub
 			_tg = null;
 			_reportsDirty = true;
 			if (t != null) { t.Dispose(); }
+			TelegramClient ti = _idleTg;		//// 토큰이 바뀌면 미처리 알림 클라이언트도 새로(다음 IdleSend 가 만든다 - 진행 중 호출은 실패로 끝나 다음 주기에 다시)
+			_idleTg = null;
+			if (ti != null) { ti.Dispose(); }
 		}
 
 		//// ===== 받기 =====
@@ -753,6 +758,11 @@ namespace FTeleHub
 						CheckNoReply();
 						_lastNoReplyCheck = DateTime.Now;
 					}
+					if ((DateTime.Now - _lastIdleCheck).TotalMinutes >= 2)
+					{
+						_lastIdleCheck = DateTime.Now;
+						CheckIdle();
+					}
 				}
 				catch (Exception ex)
 				{
@@ -857,6 +867,112 @@ namespace FTeleHub
 				if (seen) { continue; }
 				SendSafe(tg, _c.ChatId, r.thread, "🛰 [허브] 회신 없음 - " + r.id + " (만료 시각 " + r.exp + " 지남). 만료는 그 PC 세션이 확정합니다.", r.msg);
 				_ledger.Append(new LedgerRecord { ev = "noreply", id = r.id });
+			}
+		}
+
+		//// [§11] 미처리 알림 - PC 사이 요청 · 신호(I1 ~ I6) 와 보고 없는 텔레그램 지시. 실패는 로그만(I7).
+		private void CheckIdle()
+		{
+			int idle;
+			lock (_c.Sync) { idle = RelayIdle.ClampIdle(_c.IdleMinutes); }
+			if (idle <= 0 || _c.ChatId == 0) { return; }
+			TelegramClient tg = Tg();
+			if (tg == null) { return; }
+			if (_idle == null) { _idle = new RelayIdle(HubConfig.DataFolder); }
+			//// [J10 · 코드 리뷰 R1] 동기화(fetch) · 검사 · 알림 전체에 같은 마감. 깃 잠금은 fetch · 검사 동안만, 알림은 잠금 밖.
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int budget = RelayIdle.BudgetMs;
+			Dictionary<string, List<string>> map = _c.RelayNodesSnapshot();
+			DateTime now = DateTime.Now;
+			try
+			{
+				//// [코드 리뷰 R1 4 회차] 잠금도 남은 시간 안에서만 기다린다 - 못 얻으면 이번 주기의 검사는 건너뛴다(알림은 지난 검사 결과로)
+				int scanBudget = budget - RelayIdle.SendReserveMs;
+				bool scanned = false;		//// [코드 리뷰 R4 5 회차] 이번 주기에 머리까지 다 본 경우에만 알린다
+				if (System.Threading.Monitor.TryEnter(_gitLock, Math.Max(0, scanBudget - (int)sw.ElapsedMilliseconds)))
+				{
+					try
+					{
+						int rest = scanBudget - (int)sw.ElapsedMilliseconds;
+						if (rest > 200)		//// 마감이 지났거나 거의 없으면 fetch 를 시작하지 않는다
+						{
+							_git.Fetch(rest);		//// origin/<branch> 만 갱신 - 작업 트리는 보고 전송(SyncHard) 몫
+							scanned = _idle.ScanRelay((a, ms) => _git.Run(_git.RepoPath, a, ms), _c.RelayDir, "origin/" + _c.Branch, map, idle, now, sw, scanBudget);
+						}
+					}
+					finally
+					{
+						System.Threading.Monitor.Exit(_gitLock);
+					}
+				}
+				else
+				{
+					HubLog.Info("idle : git busy - relay scan skipped this cycle");
+				}
+				if (scanned) _idle.NotifyRelay(map, idle, now, (node, text) =>
+				{
+					long thread = _c.ThreadOfNode(node);
+					if (thread == 0)
+					{
+						HubLog.Info("idle : node " + node + " has no topic - skipped");
+						return true;		//// J7 토픽 없는 노드는 보낼 곳이 없다 - 다시 시도하지 않는다
+					}
+					return IdleSend(thread, text, 0);
+				}, sw, budget);
+			}
+			catch (Exception ex)
+			{
+				HubLog.Warn("idle : relay check " + ex.GetType().Name + " " + ex.Message);
+			}
+			//// 텔레그램 지시 : "전달됨" 으로 처음 본 허브 시각부터 IdleMinutes 동안 보고(읽음 등)가 없는 것(코드 리뷰 R3 - 전달 전 대기는 빼고 잰다)
+			//// 대상 = 전달됨 · 받은 지 24 시간 안. 기록 정리도 이 집합 기준(24 시간이 지난 지시는 다시 대상이 되지 않는다 - 코드 리뷰 4 회차 잔여 위험)
+			List<LedgerRecord> delivered = _ledger.Delivered().Where(r =>
+			{
+				DateTime t;
+				return r.kind == "request" && DateTime.TryParse(r.ts, out t) && (now - t).TotalHours < 24;
+			}).ToList();
+			_idle.PruneTg(new HashSet<string>(delivered.Select(r => r.id), StringComparer.Ordinal));
+			foreach (LedgerRecord r in delivered)
+			{
+				DateTime ts;
+				if (DateTime.TryParse(r.ts, out ts) == false || (now - ts).TotalHours >= 24) { continue; }		//// 만료된 지시는 기존 24 시간 "회신 없음" 몫
+				bool seen;
+				lock (_seenLock) { seen = _tgSeen.Contains(r.id); }
+				if (seen || _idle.TgWasSent(r.id)) { continue; }
+				DateTime first = _idle.TgFirstSeen(r.id, now);		//// 마감과 무관하게 처음 본 시각은 기록한다
+				int mins = (int)(now - first).TotalMinutes;
+				if (mins < idle) { continue; }
+				if (sw.ElapsedMilliseconds + RelayIdle.SendReserveMs > budget) { continue; }		//// [코드 리뷰 R1] 보내기는 남은 시간 안에서만 - 나머지는 다음 주기(이 반복은 메모리 판정뿐)
+				if (IdleSend(r.thread, RelayIdle.TgMessage(r.id, mins), r.msg))
+				{
+					_idle.MarkTgSent(r.id);		//// J4 - 장부에는 쓰지 않는다
+					HubLog.Info("idle : " + r.id + " -> " + r.node);
+				}
+			}
+			_idle.SaveIfDirty();		//// 처음 본 시각 · 정리는 한 번에 저장
+		}
+
+		//// [§11-2 J10 · 코드 리뷰 R1] 미처리 알림 전용 보내기 - 제한 5 s 클라이언트, 429 · 실패는 기다리지 않고 false(다음 주기에 다시).
+		private volatile TelegramClient _idleTg;
+
+		private bool IdleSend(long thread, string text, long replyTo)
+		{
+			if (_c.ChatId == 0) { return false; }
+			try
+			{
+				if (_idleTg == null)
+				{
+					string tok = _c.Token;
+					if (string.IsNullOrEmpty(tok)) { return false; }
+					_idleTg = new TelegramClient(tok, RelayIdle.SendReserveMs / 1000);
+				}
+				_idleTg.SendMessage(_c.ChatId, thread, text, replyTo);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				HubLog.Warn("idle send : " + ex.GetType().Name + " " + ex.Message);
+				return false;
 			}
 		}
 
